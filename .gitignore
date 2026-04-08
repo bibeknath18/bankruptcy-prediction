@@ -13,10 +13,6 @@ venv/
 # Data
 data/
 
-# Large model files (too big for GitHub)
-artifacts/shap_explainer.pkl
-artifacts/stacking_ensemble.pkl
-
 # Node
 frontend/node_modules/
 frontend/build/
