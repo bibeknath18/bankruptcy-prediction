@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Data
+data/
+
+# Large model files (too big for GitHub)
+artifacts/shap_explainer.pkl
+artifacts/stacking_ensemble.pkl
+
+# Node
+frontend/node_modules/
+frontend/build/
+
+# Docker
+catboost_info/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

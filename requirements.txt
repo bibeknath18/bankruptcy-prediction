@@ -1,0 +1,16 @@
+fastapi==0.111.0
+uvicorn==0.29.0
+python-multipart==0.0.9
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.4.2
+xgboost==2.0.3
+lightgbm==4.3.0
+catboost==1.2.5
+imbalanced-learn==0.12.2
+lifelines==0.28.0
+shap==0.45.0
+joblib==1.4.2
+pdfplumber==0.11.0
+pymupdf==1.24.3
+openpyxl==3.1.2
