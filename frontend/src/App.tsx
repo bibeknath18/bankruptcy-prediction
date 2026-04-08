@@ -5,7 +5,7 @@ import {
   Tooltip, ReferenceLine, ResponsiveContainer
 } from "recharts";
 
-const API = "http://localhost:8000";
+const API = "https://bankruptcy-prediction-production.up.railway.app";
 
 interface ShapItem { feature: string; shap_value: number }
 interface Result {
