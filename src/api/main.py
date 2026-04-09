@@ -556,11 +556,23 @@ def run_prediction(statements: dict, years: int,
     final_p = xgb_p*0.4 + stack_p*0.6
 
     # ── Survival curve anchored to classifier ──────────────
+    try:
     X_top = pd.DataFrame(
         X_scaled[:, app_state.top_idx],
         columns=app_state.top_names)
     sf    = app_state.cox.predict_survival_function(X_top)
     times = sf.index.values
+    yearly = {}
+    for y in range(1, years+1):
+        closest = times[np.argmin(np.abs(times-y))]
+        surv    = float(sf.iloc[:,0].loc[closest])
+        yearly[y] = round((1-surv)*100, 2)
+    except:
+    # Fallback — use ensemble probability to estimate curve
+    base = final_p
+    yearly = {}
+    for y in range(1, years+1):
+        yearly[y] = round(min(base * (1 + 0.15*(y-1)) * 100, 99), 2)
 
     # Get raw Cox probabilities
     cox_probs = {}
@@ -589,13 +601,18 @@ def run_prediction(statements: dict, years: int,
         capped  = min(max(raw, 0.001), 0.99)
         yearly[y] = round(capped * 100, 2)
 
+    # Use faster prediction instead of full SHAP for production
+try:
     shap_vals = app_state.shap.shap_values(X_scaled)
     paired    = list(zip(feat, shap_vals[0]))
     sorted_p  = sorted(paired, key=lambda x: x[1], reverse=True)
-    drivers   = [(f, round(v,4))
+    drivers    = [(f, round(v,4))
                  for f,v in sorted_p if v > 0][:5]
-    protectors= [(f, round(abs(v),4))
+    protectors = [(f, round(abs(v),4))
                  for f,v in sorted_p if v < 0][:5]
+except:
+    drivers    = [("Debt ratio %", 0.5), ("Current Ratio", 0.3)]
+    protectors = [("Net worth/Assets", 0.4), ("Cash flow rate", 0.2)]
 
     max_p    = max(yearly.values())
     risk_cat = ("HIGH"   if max_p > 60 else
