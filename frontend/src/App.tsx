@@ -51,7 +51,10 @@ export default function App() {
     form.append("years",        String(years));
     form.append("company_name", company.trim() || "Unknown Company");
     try {
-      const res = await axios.post(`${API}/predict/upload`, form, {
+      const endpoint = file.name.endsWith('.csv') 
+        ? `${API}/predict/csv-direct` 
+        : `${API}/predict/upload`;
+      const res = await axios.post(endpoint, form, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       setResult(res.data);

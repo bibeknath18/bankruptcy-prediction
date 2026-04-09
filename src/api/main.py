@@ -890,7 +890,92 @@ async def predict_manual(data: dict):
     except Exception as e:
         raise HTTPException(500, str(e))
 
+@app.post("/predict/csv-direct")
+async def predict_csv_direct(
+    file        : UploadFile = File(...),
+    years       : int        = Form(default=5),
+    company_name: str        = Form(default="Company")
+):
+    """
+    Upload a CSV with pre-computed financial ratios
+    in the same format as the training data.
+    """
+    import io
+    contents = await file.read()
+    df = pd.read_csv(io.BytesIO(contents))
+    df = df.drop(columns=["Bankrupt?"], errors="ignore")
 
+    if df.empty:
+        raise HTTPException(422, "Empty CSV file")
+
+    # Align to model features
+    feat       = app.state.features
+    df_aligned = df.reindex(columns=feat, fill_value=0)
+    X_scaled   = np.clip(app.state.scaler.transform(df_aligned), -5, 5)
+
+    # Predict
+    xgb_p = float(app.state.xgb.predict_proba(X_scaled)[0][1])
+    if app.state.stack is not None:
+        stack_p = float(app.state.stack.predict_proba(X_scaled)[0][1])
+        final_p = xgb_p * 0.4 + stack_p * 0.6
+    else:
+        final_p = xgb_p
+
+    # Survival curve
+    yearly = {}
+    if app.state.cox is not None:
+        try:
+            X_top = pd.DataFrame(
+                X_scaled[:, app.state.top_idx],
+                columns=app.state.top_names)
+            sf    = app.state.cox.predict_survival_function(X_top)
+            times = sf.index.values
+            for y in range(1, years+1):
+                closest = times[np.argmin(np.abs(times-y))]
+                surv    = float(sf.iloc[:,0].loc[closest])
+                yearly[y] = round((1-surv)*100, 2)
+        except:
+            for y in range(1, years+1):
+                yearly[y] = round(min(final_p*(1+0.1*(y-1))*100, 99), 2)
+    else:
+        for y in range(1, years+1):
+            yearly[y] = round(min(final_p*(1+0.1*(y-1))*100, 99), 2)
+
+    # SHAP
+    drivers    = []
+    protectors = []
+    if app.state.shap is not None:
+        try:
+            shap_vals = app.state.shap.shap_values(X_scaled)
+            paired    = list(zip(feat, shap_vals[0]))
+            sorted_p  = sorted(paired, key=lambda x: x[1], reverse=True)
+            drivers    = [{"feature": f, "shap_value": round(v, 4)}
+                         for f,v in sorted_p if v > 0][:5]
+            protectors = [{"feature": f, "shap_value": round(abs(v), 4)}
+                         for f,v in sorted_p if v < 0][:5]
+        except:
+            pass
+
+    max_p    = max(yearly.values())
+    risk_cat = "HIGH" if max_p > 60 else "MEDIUM" if max_p > 25 else "LOW"
+    final_prob = yearly[years]
+
+    return JSONResponse(content={
+        "company"              : company_name,
+        "risk_category"        : risk_cat,
+        "yearly_probabilities" : {int(k): float(v) for k,v in yearly.items()},
+        "xgb_probability"      : round(xgb_p*100, 2),
+        "ensemble_probability" : round(final_p*100, 2),
+        "top_risk_drivers"     : drivers,
+        "protective_factors"   : protectors,
+        "items_extracted"      : int(df.shape[1]),
+        "message"              : (
+            f"{company_name} has a {final_prob:.1f}% probability "
+            f"of going bankrupt in {years} years. Risk Level: {risk_cat}."
+        )
+    })
+    
+    
 @app.post("/debug/extract")
 async def debug_extract(
     file: UploadFile = File(...),
